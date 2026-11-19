@@ -1,0 +1,13 @@
+services:
+  vaulty-backend:
+    container_name: vaulty-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - API_KEY=change-me-to-a-strong-secret
+      - VAULT_DIR=/data/vault
+      - GIN_MODE=release
+      - TZ=Europe/Berlin
+    volumes:
+      - ./data:/data/vault
