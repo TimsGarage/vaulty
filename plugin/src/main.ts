@@ -1,15 +1,23 @@
 import { Notice, Plugin, debounce, requestUrl } from 'obsidian';
-import { DEFAULT_SETTINGS, EXCLUDED_PATHS, SyncSettings, VaultyPluginSettingTab } from './settings';
+import {
+	DEFAULT_SETTINGS,
+	EXCLUDED_PATHS,
+	SyncSettings,
+	VaultyPluginSettingTab,
+} from './settings';
 
 export default class VaultyPlugin extends Plugin {
 	settings!: SyncSettings;
 	isSyncing = false;
 	pendingSync = true;
 
-	debouncedSync = debounce(() => {
-		this.runSync(true);
-	}, 5000, true) // Wait 5sec after typing, then run synd
-
+	debouncedSync = debounce(
+		() => {
+			this.runSync(true);
+		},
+		5000,
+		true,
+	); // Wait 5sec after typing, then run synd
 
 	async onload() {
 		await this.loadSettings();
@@ -23,7 +31,7 @@ export default class VaultyPlugin extends Plugin {
 		this.addCommand({
 			id: 'trigger-homeserver-sync',
 			name: 'Sync vault with homeserver',
-			callback: () => this.runSync(false)
+			callback: () => this.runSync(false),
 		});
 
 		this.addSettingTab(new VaultyPluginSettingTab(this.app, this));
@@ -32,14 +40,28 @@ export default class VaultyPlugin extends Plugin {
 		this.app.workspace.onLayoutReady(() => {
 			this.runSync(true);
 
-			this.registerEvent(this.app.vault.on('create', (file) => this.onLocalChange(file.path)));
-			this.registerEvent(this.app.vault.on('modify', (file) => this.onLocalChange(file.path)));
-			this.registerEvent(this.app.vault.on('delete', (file) => this.onLocalChange(file.path)));
-			this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
-				this.onLocalChange(file.path);
-				this.onLocalChange(oldPath);
-			}));
-		})
+			this.registerEvent(
+				this.app.vault.on('create', (file) =>
+					this.onLocalChange(file.path),
+				),
+			);
+			this.registerEvent(
+				this.app.vault.on('modify', (file) =>
+					this.onLocalChange(file.path),
+				),
+			);
+			this.registerEvent(
+				this.app.vault.on('delete', (file) =>
+					this.onLocalChange(file.path),
+				),
+			);
+			this.registerEvent(
+				this.app.vault.on('rename', (file, oldPath) => {
+					this.onLocalChange(file.path);
+					this.onLocalChange(oldPath);
+				}),
+			);
+		});
 
 		// Register periodic background sync
 		this.registerInterval(
@@ -47,19 +69,20 @@ export default class VaultyPlugin extends Plugin {
 				if (this.settings.autoSyncIntervalSeconds > 0) {
 					this.runSync(true);
 				}
-			}, this.settings.autoSyncIntervalSeconds * 1000)
-		)
+			}, this.settings.autoSyncIntervalSeconds * 1000),
+		);
 	}
 
 	onLocalChange(path: string) {
-		if(this.isSyncing) return;
-		if(this.isExcluded(path)) return;
+		if (this.isSyncing) return;
+		if (this.isExcluded(path)) return;
 		this.debouncedSync();
 	}
 
 	isExcluded(path: string): boolean {
-		if(EXCLUDED_PATHS.has(path)) return true;
-		if (!this.settings.syncSettingsFolder && path.startsWith('./obsidian/')) return true;
+		if (EXCLUDED_PATHS.has(path)) return true;
+		if (!this.settings.syncSettingsFolder && path.startsWith('./obsidian/'))
+			return true;
 		return false;
 	}
 
@@ -67,14 +90,15 @@ export default class VaultyPlugin extends Plugin {
 		const results: string[] = [];
 		const listed = await this.app.vault.adapter.list(dir);
 		for (const file of listed.files) {
-			if(!this.isExcluded(file)) {
+			if (!this.isExcluded(file)) {
 				results.push(file);
 			}
 		}
 
 		for (const folder of listed.folders) {
-			if(folder === '.obsidian' && !this.settings.syncSettingsFolder) continue;
-			if(folder === '.trash') continue;
+			if (folder === '.obsidian' && !this.settings.syncSettingsFolder)
+				continue;
+			if (folder === '.trash') continue;
 			const subFiles = await this.walkAdapterFiles(folder);
 			results.push(...subFiles);
 		}
@@ -113,10 +137,10 @@ export default class VaultyPlugin extends Plugin {
 			url: `${this.settings.serverUrl}${endpoint}`,
 			method,
 			headers: {
-				'Authorization': `Bearer ${this.settings.apiKey}`,
-				'Content-Type': 'application/json'
+				Authorization: `Bearer ${this.settings.apiKey}`,
+				'Content-Type': 'application/json',
 			},
-			body: body ? JSON.stringify(body) : undefined
+			body: body ? JSON.stringify(body) : undefined,
 		});
 		return response.json;
 	}
@@ -125,18 +149,23 @@ export default class VaultyPlugin extends Plugin {
 		if (this.isSyncing) {
 			this.pendingSync = true;
 			return;
-		};
+		}
 		this.isSyncing = true;
-		if(!silent) new Notice('Starting homeserver sync...');
+		if (!silent) new Notice('Starting homeserver sync...');
 
 		try {
 			// 1. Fetch remote manifest
-			const remoteManifest: Record<string, { hash: string; mtime: number }> =
-				await this.apiRequest('/api/manifest');
+			const remoteManifest: Record<
+				string,
+				{ hash: string; mtime: number }
+			> = await this.apiRequest('/api/manifest');
 
 			// 2. Build local manifest
 			const localPaths = await this.walkAdapterFiles('');
-			const localMap = new Map<string, { hash: string; buffer: ArrayBuffer }>();
+			const localMap = new Map<
+				string,
+				{ hash: string; buffer: ArrayBuffer }
+			>();
 
 			for (const path of localPaths) {
 				const buffer = await this.app.vault.adapter.readBinary(path);
@@ -145,9 +174,13 @@ export default class VaultyPlugin extends Plugin {
 			}
 
 			const allPaths = new Set([
-				...Object.keys(remoteManifest).filter((p) => !this.isExcluded(p)),
+				...Object.keys(remoteManifest).filter(
+					(p) => !this.isExcluded(p),
+				),
 				...localMap.keys(),
-				...Object.keys(this.settings.lastSyncedHashes).filter((p) => !this.isExcluded(p))
+				...Object.keys(this.settings.lastSyncedHashes).filter(
+					(p) => !this.isExcluded(p),
+				),
 			]);
 
 			const newSyncedHashes: Record<string, string> = {};
@@ -166,16 +199,22 @@ export default class VaultyPlugin extends Plugin {
 						// Remote changed -> Pull
 						await this.pullFile(path);
 						newSyncedHashes[path] = remote.hash;
-						changesApplied++
+						changesApplied++;
 					} else if (remote.hash === lastHash) {
 						// Local changed -> Push
 						await this.pushFile(path, local.buffer);
 						newSyncedHashes[path] = local.hash;
-						changesApplied++
+						changesApplied++;
 					} else {
 						// Both changed -> Save conflict copy and pull remote
-						const conflictPath = path.replace(/(\.[^.]+)$/, `.conflict-${Date.now()}$1`);
-						await this.app.vault.adapter.writeBinary(conflictPath, local.buffer);
+						const conflictPath = path.replace(
+							/(\.[^.]+)$/,
+							`.conflict-${Date.now()}$1`,
+						);
+						await this.app.vault.adapter.writeBinary(
+							conflictPath,
+							local.buffer,
+						);
 						await this.pullFile(path);
 						newSyncedHashes[path] = remote.hash;
 						changesApplied++;
@@ -187,19 +226,22 @@ export default class VaultyPlugin extends Plugin {
 					if (lastHash) {
 						// Was previously synced, so it was deleted on server -> Trash locally
 						await this.app.vault.adapter.remove(path);
-						changesApplied++
+						changesApplied++;
 					} else {
 						// Brand new local file -> Push
 						await this.pushFile(path, local.buffer);
 						newSyncedHashes[path] = local.hash;
-						changesApplied++
+						changesApplied++;
 					}
 				}
 				// Case C: Only exists remotely
 				else if (!local && remote) {
 					if (lastHash) {
 						// Was previously synced, so it was deleted locally -> Delete on server
-						await this.apiRequest(`/api/file?path=${encodeURIComponent(path)}`, 'DELETE');
+						await this.apiRequest(
+							`/api/file?path=${encodeURIComponent(path)}`,
+							'DELETE',
+						);
 						changesApplied++;
 					} else {
 						// Brand new remote file -> Pull
@@ -231,12 +273,14 @@ export default class VaultyPlugin extends Plugin {
 	async pushFile(path: string, buffer: ArrayBuffer) {
 		await this.apiRequest('/api/file', 'PUT', {
 			path,
-			contentBase64: this.arrayBufferToBase64(buffer)
+			contentBase64: this.arrayBufferToBase64(buffer),
 		});
 	}
 
 	async pullFile(path: string) {
-		const data = await this.apiRequest(`/api/file?path=${encodeURIComponent(path)}`);
+		const data = await this.apiRequest(
+			`/api/file?path=${encodeURIComponent(path)}`,
+		);
 		const buffer = this.base64ToArrayBuffer(data.contentBase64);
 
 		// Ensure parent folders exist
@@ -249,11 +293,14 @@ export default class VaultyPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign(
+			{},
+			DEFAULT_SETTINGS,
+			await this.loadData(),
+		);
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
 }
-

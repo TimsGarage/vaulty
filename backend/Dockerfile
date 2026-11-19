@@ -1,10 +1,10 @@
 # Stage 1: Build binary
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /src
 
 # Download dependencies first for better layer caching
-COPY go.mod ./
+COPY go.mod main.go ./
 RUN go mod tidy && go mod download
 
 COPY main.go ./

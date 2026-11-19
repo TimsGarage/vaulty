@@ -1,4 +1,4 @@
-import { App, debounce, PluginSettingTab, Setting } from 'obsidian';
+import { App, PluginSettingTab, Setting } from 'obsidian';
 import VaultyPlugin from './main';
 
 export interface SyncSettings {
@@ -14,7 +14,7 @@ export const DEFAULT_SETTINGS: SyncSettings = {
 	apiKey: 'change-me-to-a-strong-secret',
 	syncSettingsFolder: true,
 	autoSyncIntervalSeconds: 60,
-	lastSyncedHashes: {}
+	lastSyncedHashes: {},
 };
 
 export const EXCLUDED_PATHS = new Set([
@@ -22,7 +22,7 @@ export const EXCLUDED_PATHS = new Set([
 	'.obsidian/workspace-mobile.json',
 	'.obsidian/plugins/homeserver-sync/data.json',
 	'.DS_Store',
-	'Thumbs.db'
+	'Thumbs.db',
 ]);
 
 export class VaultyPluginSettingTab extends PluginSettingTab {
@@ -38,14 +38,19 @@ export class VaultyPluginSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Homeserver URL')
-			.setDesc('Base URL of your sync API (e.g., http://192.168.1.100:3000)')
+			.setDesc(
+				'Base URL of your sync API (e.g., http://192.168.1.100:3000)',
+			)
 			.addText((text) =>
 				text
 					.setValue(this.plugin.settings.serverUrl)
 					.onChange(async (value) => {
-						this.plugin.settings.serverUrl = value.replace(/\/$/, '');
+						this.plugin.settings.serverUrl = value.replace(
+							/\/$/,
+							'',
+						);
 						await this.plugin.saveSettings();
-					})
+					}),
 			);
 
 		new Setting(containerEl)
@@ -57,17 +62,19 @@ export class VaultyPluginSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.apiKey = value;
 						await this.plugin.saveSettings();
-					})
+					}),
 			);
 
 		new Setting(containerEl)
 			.setName('Sync .obsidian settings folder')
 			.setDesc('Sync themes, snippets, hotkeys, and community plugins')
 			.addToggle((toggle) =>
-				toggle.setValue(this.plugin.settings.syncSettingsFolder).onChange(async (value) => {
-					this.plugin.settings.syncSettingsFolder = value;
-					await this.plugin.saveSettings();
-				})
+				toggle
+					.setValue(this.plugin.settings.syncSettingsFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.syncSettingsFolder = value;
+						await this.plugin.saveSettings();
+					}),
 			);
 	}
 }
