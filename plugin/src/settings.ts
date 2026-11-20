@@ -20,7 +20,7 @@ export const DEFAULT_SETTINGS: SyncSettings = {
 export const EXCLUDED_PATHS = new Set([
 	'.obsidian/workspace.json',
 	'.obsidian/workspace-mobile.json',
-	'.obsidian/plugins/homeserver-sync/data.json',
+	'.obsidian/plugins/vaulty/data.json',
 	'.DS_Store',
 	'Thumbs.db',
 ]);
