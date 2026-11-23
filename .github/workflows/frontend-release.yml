@@ -1,0 +1,70 @@
+name: Release Obsidian plugin
+
+on:
+    push:
+        tags:
+            - "v*.*.*"
+    workflow_dispatch:
+        inputs:
+            tag:
+                description: "Release tag (for example, v1.2.3)"
+                required: true
+                type: string
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            id-token: write
+            attestations: write
+        defaults:
+            run:
+                working-directory: frontend
+
+        steps:
+            - uses: actions/checkout@v6
+
+            - name: Use Node.js
+              uses: actions/setup-node@v6
+              with:
+                  node-version: 24
+                  cache: npm
+                  cache-dependency-path: frontend/package-lock.json
+
+            - name: Build plugin
+              run: |
+                  npm ci
+                  npm run build
+
+            - name: Check for optional styles
+              id: styles
+              run: |
+                  if [ -f styles.css ]; then
+                    echo "exists=true" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "exists=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Attest build provenance
+              uses: actions/attest@v4
+              with:
+                  subject-path: |
+                      frontend/main.js
+                      ${{ steps.styles.outputs.exists == 'true' && 'frontend/styles.css' || '' }}
+
+            - name: Create release
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+              run: |
+                  files=(main.js manifest.json)
+
+                  if [ "${{ steps.styles.outputs.exists }}" = "true" ]; then
+                  files+=(styles.css)
+                  fi
+
+                  gh release create "$RELEASE_TAG" \
+                  --title "$RELEASE_TAG" \
+                  --draft \
+                  "${files[@]}"
