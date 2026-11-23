@@ -20,7 +20,7 @@ jobs:
             attestations: write
         defaults:
             run:
-                working-directory: frontend
+                working-directory: plugin
 
         steps:
             - uses: actions/checkout@v6
@@ -30,7 +30,7 @@ jobs:
               with:
                   node-version: 24
                   cache: npm
-                  cache-dependency-path: frontend/package-lock.json
+                  cache-dependency-path: plugin/package-lock.json
 
             - name: Build plugin
               run: |
@@ -50,8 +50,8 @@ jobs:
               uses: actions/attest@v4
               with:
                   subject-path: |
-                      frontend/main.js
-                      ${{ steps.styles.outputs.exists == 'true' && 'frontend/styles.css' || '' }}
+                      plugin/main.js
+                      ${{ steps.styles.outputs.exists == 'true' && 'plugin/styles.css' || '' }}
 
             - name: Create release
               env:
