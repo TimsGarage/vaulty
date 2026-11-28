@@ -5,6 +5,7 @@ import {
 	SyncSettings,
 	VaultyPluginSettingTab,
 } from './settings';
+import { checkForUpdates } from './updater';
 
 export default class VaultyPlugin extends Plugin {
 	settings!: SyncSettings;
@@ -33,6 +34,18 @@ export default class VaultyPlugin extends Plugin {
 			name: 'Sync vault with homeserver',
 			callback: () => void this.runSync(false),
 		});
+
+		// Command palette entry to check for plugin updates from GitHub
+		this.addCommand({
+			id: 'check-for-updates',
+			name: 'Check for plugin updates',
+			callback: () => void checkForUpdates(this, false),
+		});
+
+		// Optionally check for updates on startup (silent unless an update is found)
+		if (this.settings.autoCheckUpdates) {
+			void checkForUpdates(this, true);
+		}
 
 		this.addSettingTab(new VaultyPluginSettingTab(this.app, this));
 

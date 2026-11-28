@@ -57,6 +57,16 @@ The vault is stored in `./data` (mounted to `/data/vault`). The API listens on
    API key (the same `API_KEY` as the backend). The API key is stored in the
    plugin's `data.json`, which is excluded from sync.
 
+### Plugin self-update
+
+The plugin can update itself from the public GitHub releases of this repo:
+
+- On startup (can be disabled via the "Check for plugin updates on startup"
+  setting) and via the command **"Check for plugin updates"**, it queries the
+  GitHub API for the highest `plugin-v*.*.*` release.
+- If a newer version exists, `main.js`, `manifest.json` and `styles.css` are
+  downloaded into the plugin folder and you are asked to reload Obsidian.
+
 ## Releases (CI)
 
 - Push a tag `plugin-v*.*.*` (or trigger the **Release Obsidian plugin**

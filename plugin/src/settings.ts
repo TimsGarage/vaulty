@@ -6,6 +6,7 @@ export interface SyncSettings {
 	apiKey: string;
 	syncSettingsFolder: boolean;
 	autoSyncIntervalSeconds: number;
+	autoCheckUpdates: boolean;
 	lastSyncedHashes: Record<string, string>; // Tracks state from the last successful sync
 	// Cache of local file hashes keyed by path, used to skip re-hashing
 	// files whose mtime+size have not changed since the last sync.
@@ -17,6 +18,7 @@ export const DEFAULT_SETTINGS: SyncSettings = {
 	apiKey: 'change-me-to-a-strong-secret',
 	syncSettingsFolder: true,
 	autoSyncIntervalSeconds: 60,
+	autoCheckUpdates: true,
 	lastSyncedHashes: {},
 	localHashCache: {},
 };
@@ -73,6 +75,18 @@ export class VaultyPluginSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.apiKey)
 					.onChange(async (value) => {
 						this.plugin.settings.apiKey = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName('Check for plugin updates on startup')
+			.setDesc('Check GitHub releases for a newer Vaulty plugin version')
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.autoCheckUpdates)
+					.onChange(async (value) => {
+						this.plugin.settings.autoCheckUpdates = value;
 						await this.plugin.saveSettings();
 					}),
 			);
