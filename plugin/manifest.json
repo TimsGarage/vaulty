@@ -2,7 +2,7 @@
 	"id": "vaulty-plugin",
 	"name": "Vaulty",
 	"version": "1.0.0",
-	"minAppVersion": "1.0.0",
+	"minAppVersion": "1.5.0",
 	"description": "Allows sync with a custom backend service.",
 	"author": "TiSa",
 	"authorUrl": "https://github.com/TimSalokat",

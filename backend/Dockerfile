@@ -1,13 +1,13 @@
 # Stage 1: Build binary
-FROM golang:1.25-alpine AS builder
+FROM golang:1.27.4-alpine AS builder
 
 WORKDIR /src
 
 # Download dependencies first for better layer caching
-COPY go.mod main.go ./
-RUN go mod tidy && go mod download
+COPY go.mod go.sum ./
+RUN go mod download
 
-COPY main.go ./
+COPY main.go main_test.go ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /vaulty .
 
 # Stage 2: Minimal runtime image
@@ -30,5 +30,8 @@ EXPOSE 8080
 ENV PORT=8080
 ENV VAULT_DIR=/data/vault
 ENV GIN_MODE=release
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget -qO- http://localhost:8080/health || exit 1
 
 ENTRYPOINT ["/app/vaulty"]

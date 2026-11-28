@@ -5,7 +5,9 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - API_KEY=change-me-to-a-strong-secret
+      # Required: set API_KEY in your shell or a .env file next to this compose file.
+      # Generate one with: openssl rand -hex 32
+      - API_KEY=${API_KEY:?Set API_KEY (e.g. openssl rand -hex 32) before starting}
       - VAULT_DIR=/data/vault
       - GIN_MODE=release
       - TZ=Europe/Berlin

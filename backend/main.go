@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -13,9 +14,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/time/rate"
 )
+
+// maxBodyBytes caps request bodies (base64 payloads) to protect against
+// memory-exhaustion via oversized uploads.
+const maxBodyBytes = 25 << 20 // 25 MiB
 
 type ManifestEntry struct {
 	Hash  string `json:"hash"`
@@ -49,11 +56,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to resolve vault path: %v", err)
 	}
+	// Resolve symlinks once so all later path checks compare against the
+	// real vault root.
+	if resolved, err := filepath.EvalSymlinks(absVaultDir); err == nil {
+		absVaultDir = resolved
+	}
 	if err := os.MkdirAll(absVaultDir, 0755); err != nil {
 		log.Fatalf("Failed to create vault directory: %v", err)
 	}
 
 	r := gin.Default()
+
+	// Public health endpoint for container healthchecks
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 
 	// Bearer Token Auth Middleware (constant-time comparison)
 	r.Use(func(c *gin.Context) {
@@ -66,7 +83,21 @@ func main() {
 		c.Next()
 	})
 
+	// Per-IP rate limiting to slow down API-key brute force and abuse
+	r.Use(ipRateLimiter(rate.Limit(20), 40))
+
+	// Cap request body size before any handler reads it
+	r.Use(func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBodyBytes)
+		c.Next()
+	})
+
 	api := r.Group("/api")
+	// Audit log for every authenticated API call
+	api.Use(func(c *gin.Context) {
+		c.Next()
+		log.Printf("[AUDIT] %s %s -> %d (client %s)", c.Request.Method, c.Request.URL.Path, c.Writer.Status(), c.ClientIP())
+	})
 	{
 		// 1. Get current server manifest
 		api.GET("/manifest", func(c *gin.Context) {
@@ -128,7 +159,8 @@ func main() {
 				return
 			}
 
-			if err := os.WriteFile(fullPath, decoded, 0644); err != nil {
+			// Atomic write: temp file in the same directory, then rename
+			if err := atomicWriteFile(fullPath, decoded, 0644); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
@@ -161,7 +193,8 @@ func main() {
 	}
 }
 
-// getSafePath prevents directory traversal outside absVaultDir
+// getSafePath prevents directory traversal outside absVaultDir, including
+// via symlinks placed inside the vault.
 func getSafePath(absVaultDir, relPath string) (string, error) {
 	if relPath == "" {
 		return "", errors.New("path parameter is required")
@@ -169,11 +202,80 @@ func getSafePath(absVaultDir, relPath string) (string, error) {
 	cleaned := filepath.Clean(filepath.FromSlash(relPath))
 	target := filepath.Join(absVaultDir, cleaned)
 
-	rel, err := filepath.Rel(absVaultDir, target)
+	// Resolve symlinks via the deepest existing ancestor (the target itself
+	// may not exist yet on PUT), then re-join the remaining path.
+	probe := target
+	var resolved string
+	for {
+		if real, err := filepath.EvalSymlinks(probe); err == nil {
+			rest, relErr := filepath.Rel(probe, target)
+			if relErr != nil {
+				return "", errors.New("invalid path: cannot resolve")
+			}
+			resolved = filepath.Join(real, rest)
+			break
+		}
+		parent := filepath.Dir(probe)
+		if parent == probe {
+			return "", errors.New("invalid path: cannot resolve")
+		}
+		probe = parent
+	}
+
+	rel, err := filepath.Rel(absVaultDir, resolved)
 	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
 		return "", errors.New("invalid path: traversal detected")
 	}
-	return target, nil
+	return resolved, nil
+}
+
+// atomicWriteFile writes data to a temp file in the same directory and then
+// renames it over the target, so readers never observe a partial file.
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op after successful rename
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, perm); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("atomic rename: %w", err)
+	}
+	return nil
+}
+
+// ipRateLimiter limits requests per client IP.
+func ipRateLimiter(limit rate.Limit, burst int) gin.HandlerFunc {
+	var mu sync.Mutex
+	limiters := make(map[string]*rate.Limiter)
+
+	return func(c *gin.Context) {
+		ip := c.ClientIP()
+		mu.Lock()
+		limiter, ok := limiters[ip]
+		if !ok {
+			limiter = rate.NewLimiter(limit, burst)
+			limiters[ip] = limiter
+		}
+		mu.Unlock()
+
+		if !limiter.Allow() {
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "Rate limit exceeded"})
+			return
+		}
+		c.Next()
+	}
 }
 
 // buildManifest walks the vault directory and streams SHA-256 hashes

@@ -1,4 +1,4 @@
-name: Node.js build
+name: Lint and test
 
 on:
     push:
@@ -7,8 +7,11 @@ on:
         branches: ['**']
 
 jobs:
-    build:
+    plugin:
         runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: plugin
 
         strategy:
             matrix:
@@ -21,7 +24,26 @@ jobs:
               uses: actions/setup-node@v6
               with:
                   node-version: ${{ matrix.node-version }}
-                  cache: 'npm'
+                  cache: npm
+                  cache-dependency-path: plugin/package-lock.json
             - run: npm ci
             - run: npm run build --if-present
             - run: npm run lint
+
+    backend:
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: backend
+
+        steps:
+            - uses: actions/checkout@v6
+            - name: Set up Go
+              uses: actions/setup-go@v6
+              with:
+                  go-version: '1.27.4'
+            - run: go mod download
+            - run: go vet ./...
+            - run: go test ./...
+            - name: Vulnerability scan
+              run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

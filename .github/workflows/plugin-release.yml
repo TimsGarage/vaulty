@@ -3,11 +3,11 @@ name: Release Obsidian plugin
 on:
     push:
         tags:
-            - "v*.*.*"
+            - "plugin-v*.*.*"
     workflow_dispatch:
         inputs:
             tag:
-                description: "Release tag (for example, v1.2.3)"
+                description: "Release tag (for example, plugin-v1.2.3)"
                 required: true
                 type: string
 
