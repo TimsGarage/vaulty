@@ -51,6 +51,7 @@ jobs:
               with:
                   subject-path: |
                       plugin/main.js
+                      plugin/manifest.json
                       ${{ steps.styles.outputs.exists == 'true' && 'plugin/styles.css' || '' }}
 
             - name: Create release
@@ -66,5 +67,5 @@ jobs:
 
                   gh release create "$RELEASE_TAG" \
                   --title "$RELEASE_TAG" \
-                  --draft \
+                  --generate-notes \
                   "${files[@]}"
